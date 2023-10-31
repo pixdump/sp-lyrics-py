@@ -7,12 +7,12 @@ import re
 
 load_dotenv()
 
-client_id = os.getenv("CLIENT_ID")
-client_secret = os.getenv("CLIENT_SECRET")
-lyrics_api = os.getenv("LYRICS_API")
+CLIENT_ID = os.getenv("CLIENT_ID")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+LYRICS_API = os.getenv("LYRICS_API")
 
 
-def get_id_from_url(spotify_url: str):
+def track_id_from_url(spotify_url: str):
     """Use Regex to get Track Id from Spotify URL"""
 
     pattern = r'/track/(\w+)'
@@ -28,7 +28,7 @@ def get_id_from_url(spotify_url: str):
 
 
 def get_token():
-    auth_string = (client_id + ":" + client_secret).encode("utf-8")
+    auth_string = (CLIENT_ID + ":" + CLIENT_SECRET).encode("utf-8")
     auth_base64 = str(b64encode(auth_string), "utf-8")
 
     auth_url = "https://accounts.spotify.com/api/token"
@@ -64,29 +64,39 @@ def get_track_info(token: str, track_id: str):
 
 
 def get_lyrics(track_id: str):
-    url = lyrics_api + f"{track_id}&format=lrc"
-    lyrics_data = get(url)
-    if lyrics_data.status_code != 200:
+    url = LYRICS_API + f"{track_id}&format=lrc"
+    data = get(url)
+    if data.status_code != 200:
         print("Something went wrong")
         return None
-    lyrics_data_json = json.loads(lyrics_data.content)
-    lyrics = convert_to_lrc(lyrics_data_json)
-    print(lyrics)
+    lyrics_data = json.loads(data.content)
+    lyrics = convert_to_lrc(lyrics_data)
+    return lyrics
 
 
-def convert_to_lrc(lyric_json):
+def convert_to_lrc(lyrics_data: dict):
     lrc_lines = []
-    for line in lyric_json['lines']:
-        lrc_lines.append(f"[{line['timeTag']}] {line['words']}")
+    if lyrics_data['syncType'] == 'UNSYNCED':
+        for line in lyrics_data['lines']:
+            lrc_lines.append(line['words'])
+    else:
+        for line in lyrics_data['lines']:
+            lrc_lines.append(f"[{line['timeTag']}] {line['words']}")
 
     return '\n'.join(lrc_lines)
 
 
+def write_to_file(lyrics: str, track_name: str):
+    with open(f"{track_name}.lrc", 'w', encoding='utf-8') as lrc_file:
+        lrc_file.write(lyrics)
+
+
 token = get_token()
 spo = str(input("Enter Spotify URl: "))
-track_id = get_id_from_url(spo)
+track_id = track_id_from_url(spo)
 track_info = get_track_info(token, track_id)
 print(f"Track Name: {track_info['name']}")
 print(f"Album: {track_info['album']['name']}")
 print(f"Artist: {track_info['artists'][0]['name']}")
-get_lyrics(track_id)
+lyrics = get_lyrics(track_id)
+write_to_file(lyrics, track_info['name'])
