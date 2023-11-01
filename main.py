@@ -3,28 +3,13 @@ from dotenv import load_dotenv
 from base64 import b64encode
 import os
 import json
-import re
+from regex_helper import track_id_from_url, album_id_from_url  # noqa
 
 load_dotenv()
 
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 LYRICS_API = os.getenv("LYRICS_API")
-
-
-def track_id_from_url(spotify_url: str):
-    """Use Regex to get Track Id from Spotify URL"""
-
-    pattern = r'/track/(\w+)'
-    match = re.search(pattern, spotify_url)  # Use re.search to find the match
-
-    if match:
-        track_id = match.group(1)
-        print("Track ID:", track_id)
-        return track_id
-    else:
-        print("No match found.")
-        return None
 
 
 def get_token():
