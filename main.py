@@ -7,12 +7,13 @@ from regex_helper import track_id_from_url, album_id_from_url  # noqa
 
 load_dotenv()
 
-CLIENT_ID = os.getenv("CLIENT_ID")
-CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-LYRICS_API = os.getenv("LYRICS_API")
+CLIENT_ID = str(os.getenv("CLIENT_ID"))
+CLIENT_SECRET = str(os.getenv("CLIENT_SECRET"))
+LYRICS_API = str(os.getenv("LYRICS_API"))
 
 
-def get_token():
+def get_token() -> str:
+
     auth_string = (CLIENT_ID + ":" + CLIENT_SECRET).encode("utf-8")
     auth_base64 = str(b64encode(auth_string), "utf-8")
 
@@ -26,40 +27,42 @@ def get_token():
     result = post(auth_url, headers=headers, data=data)
 
     if result.status_code != 200:
-        print("Something Went Wrong")
-        return None
+        raise SystemExit("Something Went Wrong while getting access token")
+        # print("Something Went Wrong while getting access token")
+        # exit(0)
 
     json_result = json.loads(result.content)
     token = json_result["access_token"]
     return token
 
 
-def get_auth_header(token: str):
+def get_auth_header(token: str) -> dict:
     return {"authorization": "Bearer " + token}
 
 
-def get_track_info(token: str, track_id: str):
+def get_track_info(token: str, track_id: str) -> tuple[bool, dict]:
     url = f"https://api.spotify.com/v1/tracks/{track_id}"
     headers = get_auth_header(token)
     res = get(url, headers=headers)
     if res.status_code != 200:
-        print("Something Went Wrong")
+        return False, {"error": "Something Went Wrong With Spotify API"}
     track_data = json.loads(res.content)
-    return track_data
+    return True, track_data
 
 
-def get_lyrics(track_id: str):
+def get_lyrics(track_id: str) -> tuple[bool, str]:
     url = LYRICS_API + f"{track_id}&format=lrc"
     data = get(url)
     if data.status_code != 200:
-        print("Something went wrong")
-        return None
+        return False, "Something Went Wrong"
     lyrics_data = json.loads(data.content)
+    if lyrics_data['error']:
+        return False, "Error"
     lyrics = convert_to_lrc(lyrics_data)
-    return lyrics
+    return True, lyrics
 
 
-def convert_to_lrc(lyrics_data: dict):
+def convert_to_lrc(lyrics_data: dict) -> str:
     lrc_lines = []
     if lyrics_data['syncType'] == 'UNSYNCED':
         for line in lyrics_data['lines']:
@@ -78,10 +81,12 @@ def write_to_file(lyrics: str, track_name: str):
 
 token = get_token()
 spo = str(input("Enter Spotify URl: "))
-track_id = track_id_from_url(spo)
-track_info = get_track_info(token, track_id)
-print(f"Track Name: {track_info['name']}")
-print(f"Album: {track_info['album']['name']}")
-print(f"Artist: {track_info['artists'][0]['name']}")
-lyrics = get_lyrics(track_id)
-write_to_file(lyrics, track_info['name'])
+track_id = str(track_id_from_url(spo))
+success, track_info = get_track_info(token, track_id)
+if success:
+    print(f"Track Name: {track_info['name']}")
+    print(f"Album: {track_info['album']['name']}")
+    print(f"Artist: {track_info['artists'][0]['name']}")
+    lyrics_available, lyrics = get_lyrics(track_id)
+    if lyrics_available:
+        write_to_file(lyrics, track_info['name'])
