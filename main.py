@@ -4,7 +4,7 @@ from base64 import b64encode
 import PySimpleGUI as sg
 from os import getenv
 from typing import Tuple
-from regex_helper import track_id_from_url, is_valid_type
+from regex_helper import track_id_from_url, album_id_from_url, is_valid_type
 
 load_dotenv()
 
@@ -49,6 +49,23 @@ def get_track_info(token: str, track_id: str) -> Tuple[bool, dict]:
     return True, track_data
 
 
+def get_album_tracks(token: str, album_id: str):
+    url = f"https://api.spotify.com/v1/albums/{album_id}/tracks"
+    headers = get_auth_header(token)
+    res = get(url, headers=headers)
+    if res.status_code != 200:
+        return False, {"error": "Something Went Wrong With Spotify API"}
+    album_data = res.json()
+    return True, album_data
+
+
+def get_tracks_list(data: dict):
+    names = []
+    for item in data["items"]:
+        names.append(item["name"])
+    return "\n".join(names)
+
+
 def get_lyrics(track_id: str) -> Tuple[bool, str]:
     url = LYRICS_API + f"{track_id}&format=lrc"
     data = get(url)
@@ -76,16 +93,6 @@ def convert_to_lrc(lyrics_data: dict) -> str:
 def write_to_file(lyrics: str, track_name: str) -> None:
     with open(f"{track_name}.lrc", 'w', encoding='utf-8') as lrc_file:
         lrc_file.write(lyrics)
-
-
-def input_process_url() -> Tuple[str, str]:
-    while True:
-        url = input("Enter a Spotify URL: ")
-        url_type = is_valid_type(url)
-        if url_type == "Invalid":
-            print("Invalid Spotify URL. Please try again.")
-        else:
-            return url_type, url
 
 
 def input_dialog_box() -> Tuple[str, str]:
@@ -132,7 +139,13 @@ def main() -> None:
                 write_to_file(lyrics, track_info['name'])
                 message_box(msg=f"Successfully Fetched Lyrics for {track_info['name']}")
             else:
-                print("Error Getting Lyrics")
+                message_box("Error Getting Lyrics")
+    if url_type.lower() == "album":
+        album_id = str(album_id_from_url(spotify_url))
+        success, album_info = get_album_tracks(token, album_id)
+        if success:
+            track_list = get_tracks_list(data=album_info)
+            message_box(f"Found Album tracks: \n{track_list} \n\nAlbum Support will be added soon")
 
 
 main()
