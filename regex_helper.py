@@ -1,5 +1,5 @@
 import re
-from typing import Tuple, Union  # noqa
+from typing import Union
 
 
 def track_id_from_url(spotify_url: str) -> Union[str, None]:

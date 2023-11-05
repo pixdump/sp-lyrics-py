@@ -2,16 +2,15 @@ from requests import post, get
 from dotenv import load_dotenv
 from base64 import b64encode
 import PySimpleGUI as sg
-import os
-import json
-from typing import Tuple, Union  # noqa
-from regex_helper import track_id_from_url, is_valid_type  # noqa
+from os import getenv
+from typing import Tuple
+from regex_helper import track_id_from_url, is_valid_type
 
 load_dotenv()
 
-CLIENT_ID = str(os.getenv("CLIENT_ID"))
-CLIENT_SECRET = str(os.getenv("CLIENT_SECRET"))
-LYRICS_API = str(os.getenv("LYRICS_API"))
+CLIENT_ID = str(getenv("CLIENT_ID"))
+CLIENT_SECRET = str(getenv("CLIENT_SECRET"))
+LYRICS_API = str(getenv("LYRICS_API"))
 
 
 def get_token() -> Tuple[bool, str]:
@@ -32,8 +31,7 @@ def get_token() -> Tuple[bool, str]:
         success, msg = False, "Something Went Wrong while getting access token"
         return success, msg
 
-    json_result = json.loads(result.content)
-    token = json_result["access_token"]
+    token = result.json()['access_token']
     return success, token
 
 
@@ -47,7 +45,7 @@ def get_track_info(token: str, track_id: str) -> Tuple[bool, dict]:
     res = get(url, headers=headers)
     if res.status_code != 200:
         return False, {"error": "Something Went Wrong With Spotify API"}
-    track_data = json.loads(res.content)
+    track_data = res.json()
     return True, track_data
 
 
@@ -56,7 +54,7 @@ def get_lyrics(track_id: str) -> Tuple[bool, str]:
     data = get(url)
     if data.status_code != 200:
         return False, "Something Went Wrong"
-    lyrics_data = json.loads(data.content)
+    lyrics_data = data.json()
     if lyrics_data['error']:
         return False, "Error"
     lyrics = convert_to_lrc(lyrics_data)
@@ -90,7 +88,7 @@ def input_process_url() -> Tuple[str, str]:
             return url_type, url
 
 
-def input_dialog_box():
+def input_dialog_box() -> Tuple[str, str]:
     sg.theme("Black")
     layout = [[sg.Text('Enter Spotify URL'), sg.InputText()],
               [sg.Button('Ok'), sg.Button('Cancel')]]
