@@ -5,7 +5,7 @@ import PySimpleGUI as sg
 from os import getenv
 from typing import Tuple
 from time import sleep
-from regex_helper import track_id_from_url, album_id_from_url, is_valid_type
+from regex_helper import is_valid_type
 
 load_dotenv()
 
@@ -18,7 +18,6 @@ def get_token() -> Tuple[bool, str]:
     auth_string = (CLIENT_ID + ":" + CLIENT_SECRET).encode("utf-8")
     auth_base64 = str(b64encode(auth_string), "utf-8")
 
-    success = True
     auth_url = "https://accounts.spotify.com/api/token"
     headers = {
         "Authorization": "Basic " + auth_base64,
@@ -29,11 +28,10 @@ def get_token() -> Tuple[bool, str]:
     result = post(auth_url, headers=headers, data=data)
 
     if result.status_code != 200:
-        success, msg = False, "Something Went Wrong while getting access token"
-        return success, msg
+        return False, "Something Went Wrong while getting access token"
 
     token = result.json()['access_token']
-    return success, token
+    return True, token
 
 
 def get_auth_header(token: str) -> dict:
@@ -109,14 +107,13 @@ def input_dialog_box() -> Tuple[str, str]:
     if event == sg.WIN_CLOSED or event == 'Cancel':  # if user closes window or clicks cancel
         window.close()
         exit(0)
-    url_type = is_valid_type(values[0])
-    if url_type == "Invalid":
-        sg.popup("Invalid Spotify URL. Please try again.")
+    url_info = is_valid_type(values[0])
+    if url_info['type'] is not None:
         window.close()
-        return input_dialog_box()
-    else:
-        window.close()
-        return url_type, values[0]
+        return url_info['type'], url_info['id']
+    sg.popup("Invalid Spotify URL. Please try again.")
+    window.close()
+    return input_dialog_box()
 
 
 def message_box(msg: str) -> None:
@@ -126,27 +123,25 @@ def message_box(msg: str) -> None:
 
 
 def main() -> None:
-    url_type, spotify_url = input_dialog_box()
+    url_type, id_from_url = input_dialog_box()
     success, token = get_token()
     if not success:
         message_box(msg=token)
         exit(0)
-    if url_type.lower() == "track":
-        track_id = str(track_id_from_url(spotify_url))
-        success, track_info = get_track_info(token, track_id)
+    if url_type == "track":
+        success, track_info = get_track_info(token, id_from_url)
         if success:
             print(f"Track Name: {track_info['name']}")
             print(f"Album: {track_info['album']['name']}")
             print(f"Artist: {track_info['artists'][0]['name']}")
-            lyrics_available, lyrics = get_lyrics(track_id)
+            lyrics_available, lyrics = get_lyrics(id_from_url)
             if lyrics_available:
                 write_to_file(lyrics, track_info['name'])
                 message_box(msg=f"Successfully Fetched Lyrics for {track_info['name']}")
             else:
                 message_box("Error Getting Lyrics")
-    if url_type.lower() == "album":
-        album_id = str(album_id_from_url(spotify_url))
-        success, album_info = get_album_tracks(token, album_id)
+    if url_type == "album":
+        success, album_info = get_album_tracks(token, id_from_url)
         if success:
             track_names, track_ids = get_tracks_list(data=album_info)
             message_box(f"Found Album tracks: \n{track_names}")
