@@ -4,6 +4,7 @@ from base64 import b64encode
 import PySimpleGUI as sg
 from os import getenv
 from typing import Tuple
+from time import sleep
 from regex_helper import track_id_from_url, album_id_from_url, is_valid_type
 
 load_dotenv()
@@ -60,10 +61,13 @@ def get_album_tracks(token: str, album_id: str):
 
 
 def get_tracks_list(data: dict):
-    names = []
+    names, track_ids = [], []
     for item in data["items"]:
         names.append(item["name"])
-    return "\n".join(names)
+        track_ids.append(item["id"])
+    names = "\n".join(names)
+    # print(names)
+    return names, track_ids
 
 
 def get_lyrics(track_id: str) -> Tuple[bool, str]:
@@ -115,7 +119,7 @@ def input_dialog_box() -> Tuple[str, str]:
         return url_type, values[0]
 
 
-def message_box(msg: str):
+def message_box(msg: str) -> None:
     window = sg.Window('Lyrics')
     sg.popup(msg)
     window.close()
@@ -144,8 +148,23 @@ def main() -> None:
         album_id = str(album_id_from_url(spotify_url))
         success, album_info = get_album_tracks(token, album_id)
         if success:
-            track_list = get_tracks_list(data=album_info)
-            message_box(f"Found Album tracks: \n{track_list} \n\nAlbum Support will be added soon")
+            track_names, track_ids = get_tracks_list(data=album_info)
+            message_box(f"Found Album tracks: \n{track_names}")
+            for track in track_ids:
+                success, track_info = get_track_info(token, track)
+                sleep(3)
+                if success:
+                    print(f"Track Name: {track_info['name']}")
+                    print(f"Album: {track_info['album']['name']}")
+                    print(f"Artist: {track_info['artists'][0]['name']}")
+                    lyrics_available, lyrics = get_lyrics(track)
+                    if lyrics_available:
+                        write_to_file(lyrics, track_info['name'])
+                        message_box(msg=f"Successfully Fetched Lyrics for {track_info['name']}")
+                    else:
+                        message_box("Error Getting Lyrics")
+                else:
+                    message_box("Error Getting Track Info")
 
 
 main()
