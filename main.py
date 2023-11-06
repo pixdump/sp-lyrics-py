@@ -16,65 +16,70 @@ LYRICS_API = str(os.getenv("LYRICS_API"))
 ERR_DEFAULT = {"error": "Something Went Wrong With Spotify API"}
 
 
-def get_token() -> Tuple[bool, str]:
-    auth_url = "https://accounts.spotify.com/api/token"
-    data = {"grant_type": "client_credentials"}
-    result = post(auth_url, data=data, auth=(CLIENT_ID, CLIENT_SECRET))
+class SpotifyHelper:
+    def __init__(self) -> None:
+        self.client_id: str = CLIENT_ID
+        self.client_secret: str = CLIENT_SECRET
+        self.access_token: str = ""
 
-    if result.status_code != 200:
-        return False, "Something Went Wrong while getting access token"
+    def __call__(self) -> None:
+        if len(self.access_token) == 0:
+            self.access_token = self.get_token()
 
-    token = result.json()['access_token']
-    return True, token
+    def get_token(self) -> str:
+        auth_url = "https://accounts.spotify.com/api/token"
+        data = {"grant_type": "client_credentials"}
+        result = post(auth_url, data=data, auth=(self.client_id, self.client_secret))
 
+        if result.status_code != 200:
+            message_box(msg="Something Went Wrong while getting access token")
+            exit(0)
 
-def get_auth_header(token: str) -> dict:
-    return {"authorization": "Bearer " + token}
+        return result.json()['access_token']
+
+    def get_auth_header(self) -> dict:
+        return {"authorization": "Bearer " + self.access_token}
+
+    def process_track(self, track_id) -> None:
+        success, track_info = self.get_track_info(track_id)
+        if success:
+            print_track_info(track_info)
+            fetch_and_write_lyrics(track_id, track_info['name'])
+        else:
+            message_box("Error Getting Track Info")
+
+    def get_track_info(self, track_id: str) -> Tuple[bool, dict]:
+        url = f"https://api.spotify.com/v1/tracks/{track_id}"
+        res = get(url, headers=self.get_auth_header())
+        if res.status_code != 200:
+            return False, ERR_DEFAULT
+        track_data = res.json()
+        return True, track_data
+
+    def get_album_tracks(self, album_id: str) -> Tuple[bool, dict]:
+        url = f"https://api.spotify.com/v1/albums/{album_id}/tracks"
+        res = get(url, headers=self.get_auth_header())
+        if res.status_code != 200:
+            return False, ERR_DEFAULT
+        album_data = res.json()
+        return True, album_data
+
+    def process_album(self, album_id: str) -> None:
+        success, album_info = self.get_album_tracks(album_id)
+        if success:
+            track_names, track_ids = get_tracks_list(album_info)
+            message_box(f"Found Album tracks:\n{track_names}")
+            for track_id in track_ids:
+                sleep(3)
+                self.process_track(track_id)
+        else:
+            message_box("Error Getting Album Info")
 
 
 def print_track_info(track_info) -> None:
     print(f"Track Name: {track_info['name']}")
     print(f"Album: {track_info['album']['name']}")
     print(f"Artist: {track_info['artists'][0]['name']}\n")
-
-
-def process_track(track_id, token) -> None:
-    success, track_info = get_track_info(token, track_id)
-    if success:
-        print_track_info(track_info)
-        fetch_and_write_lyrics(track_id, track_info['name'])
-    else:
-        message_box("Error Getting Track Info")
-
-
-def get_track_info(token: str, track_id: str) -> Tuple[bool, dict]:
-    url = f"https://api.spotify.com/v1/tracks/{track_id}"
-    res = get(url, headers=get_auth_header(token))
-    if res.status_code != 200:
-        return False, ERR_DEFAULT
-    track_data = res.json()
-    return True, track_data
-
-
-def get_album_tracks(token: str, album_id: str) -> Tuple[bool, dict]:
-    url = f"https://api.spotify.com/v1/albums/{album_id}/tracks"
-    res = get(url, headers=get_auth_header(token))
-    if res.status_code != 200:
-        return False, ERR_DEFAULT
-    album_data = res.json()
-    return True, album_data
-
-
-def process_album(album_id, token) -> None:
-    success, album_info = get_album_tracks(token, album_id)
-    if success:
-        track_names, track_ids = get_tracks_list(album_info)
-        message_box(f"Found Album tracks:\n{track_names}")
-        for track_id in track_ids:
-            sleep(3)
-            process_track(track_id, token)
-    else:
-        message_box("Error Getting Album Info")
 
 
 def get_tracks_list(data: dict) -> Tuple[str, list]:
@@ -150,15 +155,15 @@ def message_box(msg: str) -> None:
 
 
 def main() -> None:
+    if len(CLIENT_ID) == 0 or len(CLIENT_SECRET) == 0 or len(LYRICS_API) == 0:
+        message_box("Important Details missing Please Check your .env")
+        exit(1)
     url_type, id_from_url = input_dialog_box()
-    success, token = get_token()
-    if not success:
-        message_box(msg=token)
-        exit(0)
+    spotify = SpotifyHelper()
     if url_type == "track":
-        process_track(id_from_url, token)
+        spotify.process_track(id_from_url)
     elif url_type == "album":
-        process_album(id_from_url, token)
+        spotify.process_album(id_from_url)
 
 
 if __name__ == "__main__":
