@@ -96,13 +96,11 @@ class Helpers:
 
     def convert_to_lrc(self, lyrics_data: dict) -> str:
         lrc_lines = []
-        if lyrics_data['syncType'].lower() == 'unsynced':
-            for line in lyrics_data['lines']:
+        for line in lyrics_data['lines']:
+            if lyrics_data['syncType'].lower() == 'unsynced':
                 lrc_lines.append(line['words'])
-        else:
-            for line in lyrics_data['lines']:
-                lrc_lines.append(f"[{line['timeTag']}] {line['words']}")
-
+                continue
+            lrc_lines.append(f"[{line['timeTag']}] {line['words']}")
         return '\n'.join(lrc_lines)
 
     def fetch_and_write_lyrics(self, track_id, track_name) -> None:
@@ -125,7 +123,8 @@ class Helpers:
         return True, lyrics
 
     def write_to_file(self, lyrics: str, track_name: str) -> None:
-        with open(f"{track_name}.lrc", 'w', encoding='utf-8') as lrc_file:
+        p = os.path.join(os.getcwd(), f"{track_name}.lrc")
+        with open(p, 'w', encoding='utf-8') as lrc_file:
             lrc_file.write(lyrics)
 
 
@@ -160,7 +159,7 @@ def main() -> None:
         exit(1)
     url_type, id_from_url = input_dialog_box()
     spotify = SpotifyHelper()
-    spotify.get_token()
+    spotify()
     if url_type == "track":
         spotify.process_track(id_from_url)
     elif url_type == "album":
