@@ -22,6 +22,7 @@ class SpotifyHelper:
         self.client_secret: str = CLIENT_SECRET
         self.access_token: str = ""
         self.helper = Helpers()
+        self.gui = GUI_helpers()
 
     def __call__(self) -> None:
         if len(self.access_token) == 0:
@@ -30,14 +31,16 @@ class SpotifyHelper:
     def get_token(self) -> None:
         auth_url = "https://accounts.spotify.com/api/token"
         data = {"grant_type": "client_credentials"}
-        result = post(auth_url, data=data, auth=(self.client_id, self.client_secret))
+        result = post(auth_url, data=data, auth=(
+            self.client_id, self.client_secret))
 
         if result.status_code != 200:
-            message_box(msg="Something Went Wrong while getting access token")
+            self.gui.message_box(
+                msg="Something Went Wrong while getting access token")
             exit(0)
         self.access_token = result.json()['access_token']
 
-    def get_auth_header(self) -> dict:
+    def get_auth_header(self) -> dict[str, str]:
         return {"authorization": "Bearer " + self.access_token}
 
     def process_track(self, track_id) -> None:
@@ -46,7 +49,7 @@ class SpotifyHelper:
             self.helper.print_track_info(track_info)
             self.helper.fetch_and_write_lyrics(track_id, track_info['name'])
         else:
-            message_box("Error Getting Track Info")
+            self.gui.message_box("Error Getting Track Info")
 
     def get_track_info(self, track_id: str) -> Tuple[bool, dict]:
         url = f"https://api.spotify.com/v1/tracks/{track_id}"
@@ -69,17 +72,17 @@ class SpotifyHelper:
         success, album_info = self.get_album_tracks(album_id)
         if success:
             track_names, track_ids = self.helper.get_tracks_list(album_info)
-            message_box(f"Found Album tracks:\n{track_names}")
+            self.gui.message_box(f"Found Album tracks:\n{track_names}")
             for track_id in track_ids:
                 sleep(3)
                 self.process_track(track_id)
         else:
-            message_box("Error Getting Album Info")
+            self.gui.message_box("Error Getting Album Info")
 
 
 class Helpers:
     def __init__(self) -> None:
-        pass
+        self.gui = GUI_helpers()
 
     def print_track_info(self, track_info: dict) -> None:
         print(f"Track Name: {track_info['name']}")
@@ -107,9 +110,10 @@ class Helpers:
         lyrics_available, lyrics = self.get_lyrics(track_id)
         if lyrics_available:
             self.write_to_file(lyrics, track_name)
-            message_box(msg=f"Successfully Fetched Lyrics for {track_name}")
+            self.gui.message_box(
+                msg=f"Successfully Fetched Lyrics for {track_name}")
         else:
-            message_box("Error Getting Lyrics")
+            self.gui.message_box("Error Getting Lyrics")
 
     def get_lyrics(self, track_id: str) -> Tuple[bool, str]:
         url = LYRICS_API + f"{track_id}&format=lrc"
@@ -128,37 +132,43 @@ class Helpers:
             lrc_file.write(lyrics)
 
 
-def input_dialog_box() -> Tuple[str, str]:
-    sg.theme("Black")
-    layout = [[sg.Text('Enter Spotify URL'), sg.InputText()],
-              [sg.Button('Ok'), sg.Button('Cancel')]]
-    window = sg.Window('Lyrics', layout)
+class GUI_helpers:
+    def __init__(self) -> None:
+        pass
 
-    event, values = window.read()  # type: ignore
-    if event == sg.WIN_CLOSED or event == 'Cancel':  # if user closes window or clicks cancel
+    def input_dialog_box(self) -> Tuple[str, str]:
+        sg.theme("Black")
+        while True:
+            layout = [[sg.Text('Enter Spotify URL'), sg.InputText()],
+                      [sg.Button('Ok'), sg.Button('Cancel')]]
+            window = sg.Window('Lyrics', layout)
+
+            event, values = window.read()  # type: ignore
+            if event == sg.WIN_CLOSED or event == 'Cancel':  # if user closes window or clicks cancel
+                window.close()
+                exit(0)
+
+            url_info = is_valid_type(values[0])
+            if url_info['type'] is not None:
+                window.close()
+                return url_info['type'].lower(), url_info['id']
+            sg.popup("Invalid Spotify URL. Please try again.")
+            window.close()
+        # return self.input_dialog_box()
+
+    def message_box(self, msg: str) -> None:
+        window = sg.Window('Lyrics')
+        sg.popup(msg)
         window.close()
-        exit(0)
-    url_info = is_valid_type(values[0])
-    if url_info['type'] is not None:
-        window.close()
-        return url_info['type'].lower(), url_info['id']
-    sg.popup("Invalid Spotify URL. Please try again.")
-    window.close()
-    return input_dialog_box()
-
-
-def message_box(msg: str) -> None:
-    window = sg.Window('Lyrics')
-    sg.popup(msg)
-    window.close()
 
 
 def main() -> None:
-    if len(CLIENT_ID) == 0 or len(CLIENT_SECRET) == 0 or len(LYRICS_API) == 0:
-        message_box("Important Details missing Please Check your .env")
-        exit(1)
-    url_type, id_from_url = input_dialog_box()
     spotify = SpotifyHelper()
+    gui = GUI_helpers()
+    if len(CLIENT_ID) == 0 or len(CLIENT_SECRET) == 0 or len(LYRICS_API) == 0:
+        gui.message_box("Important Details missing Please Check your .env")
+        exit(1)
+    url_type, id_from_url = gui.input_dialog_box()
     spotify()
     if url_type == "track":
         spotify.process_track(id_from_url)
