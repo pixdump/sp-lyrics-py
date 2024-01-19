@@ -1,4 +1,4 @@
-from requests import post, get
+from requests import post as rpost, get as rget
 from dotenv import load_dotenv
 import PySimpleGUI as sg
 import os
@@ -22,7 +22,7 @@ class SpotifyHelper:
         self.client_secret: str = CLIENT_SECRET
         self.access_token: str = ""
         self.helper = Helpers()
-        self.gui = GUI_helpers()
+        self.gui = GUIHelpers()
 
     def __call__(self) -> None:
         if len(self.access_token) == 0:
@@ -31,7 +31,7 @@ class SpotifyHelper:
     def get_token(self) -> None:
         auth_url = "https://accounts.spotify.com/api/token"
         data = {"grant_type": "client_credentials"}
-        result = post(auth_url, data=data, auth=(
+        result = rpost(url=auth_url, data=data, auth=(
             self.client_id, self.client_secret))
 
         if result.status_code != 200:
@@ -43,17 +43,17 @@ class SpotifyHelper:
     def get_auth_header(self) -> dict[str, str]:
         return {"authorization": "Bearer " + self.access_token}
 
-    def process_track(self, track_id) -> None:
-        success, track_info = self.get_track_info(track_id)
+    def process_track(self, track_id: str) -> None:
+        success, track_info = self.get_track_info(track_id=track_id)
         if success:
-            self.helper.print_track_info(track_info)
-            self.helper.fetch_and_write_lyrics(track_id, track_info['name'])
+            self.helper.print_track_info(track_info=track_info)
+            self.helper.fetch_and_write_lyrics(track_name=track_info['name'], track_id=track_id, )
         else:
-            self.gui.message_box("Error Getting Track Info")
+            self.gui.message_box(msg="Error Getting Track Info")
 
     def get_track_info(self, track_id: str) -> Tuple[bool, dict]:
-        url = f"https://api.spotify.com/v1/tracks/{track_id}"
-        res = get(url, headers=self.get_auth_header())
+        req_url = f"https://api.spotify.com/v1/tracks/{track_id}"
+        res = rget(url=req_url, headers=self.get_auth_header())
         if res.status_code != 200:
             print(res.text)
             return False, ERR_DEFAULT
@@ -61,28 +61,28 @@ class SpotifyHelper:
         return True, track_data
 
     def get_album_tracks(self, album_id: str) -> Tuple[bool, dict]:
-        url = f"https://api.spotify.com/v1/albums/{album_id}/tracks"
-        res = get(url, headers=self.get_auth_header())
+        req_url = f"https://api.spotify.com/v1/albums/{album_id}/tracks"
+        res = rget(url=req_url, headers=self.get_auth_header())
         if res.status_code != 200:
             return False, ERR_DEFAULT
         album_data = res.json()
         return True, album_data
 
     def process_album(self, album_id: str) -> None:
-        success, album_info = self.get_album_tracks(album_id)
+        success, album_info = self.get_album_tracks(album_id=album_id)
         if success:
-            track_names, track_ids = self.helper.get_tracks_list(album_info)
-            self.gui.message_box(f"Found Album tracks:\n{track_names}")
+            track_names, track_ids = self.helper.get_tracks_list(data=album_info)
+            self.gui.message_box(msg=f"Found Album tracks:\n{track_names}")
             for track_id in track_ids:
                 sleep(3)
-                self.process_track(track_id)
+                self.process_track(track_id=track_id)
         else:
-            self.gui.message_box("Error Getting Album Info")
+            self.gui.message_box(msg="Error Getting Album Info")
 
 
 class Helpers:
     def __init__(self) -> None:
-        self.gui = GUI_helpers()
+        self.gui = GUIHelpers()
 
     def print_track_info(self, track_info: dict) -> None:
         print(f"Track Name: {track_info['name']}")
@@ -107,23 +107,23 @@ class Helpers:
         return '\n'.join(lrc_lines)
 
     def fetch_and_write_lyrics(self, track_id, track_name) -> None:
-        lyrics_available, lyrics = self.get_lyrics(track_id)
+        lyrics_available, lyrics = self.get_lyrics(track_id=track_id)
         if lyrics_available:
-            self.write_to_file(lyrics, track_name)
+            self.write_to_file(track_name=track_name, lyrics=lyrics)
             self.gui.message_box(
                 msg=f"Successfully Fetched Lyrics for {track_name}")
         else:
             self.gui.message_box("Error Getting Lyrics")
 
     def get_lyrics(self, track_id: str) -> Tuple[bool, str]:
-        url = LYRICS_API + f"{track_id}&format=lrc"
-        data = get(url)
+        req_url = LYRICS_API + f"{track_id}&format=lrc"
+        data = rget(url=req_url)
         if data.status_code != 200:
             return False, "Something Went Wrong"
         lyrics_data = data.json()
         if lyrics_data['error']:
             return False, "Error"
-        lyrics = self.convert_to_lrc(lyrics_data)
+        lyrics = self.convert_to_lrc(lyrics_data=lyrics_data)
         return True, lyrics
 
     def write_to_file(self, lyrics: str, track_name: str) -> None:
@@ -132,7 +132,7 @@ class Helpers:
             lrc_file.write(lyrics)
 
 
-class GUI_helpers:
+class GUIHelpers:
     def __init__(self) -> None:
         pass
 
@@ -164,16 +164,16 @@ class GUI_helpers:
 
 def main() -> None:
     spotify = SpotifyHelper()
-    gui = GUI_helpers()
+    gui = GUIHelpers()
     if len(CLIENT_ID) == 0 or len(CLIENT_SECRET) == 0 or len(LYRICS_API) == 0:
-        gui.message_box("Important Details missing Please Check your .env")
+        gui.message_box(msg="Important Details missing Please Check your .env")
         exit(1)
     url_type, id_from_url = gui.input_dialog_box()
     spotify()
     if url_type == "track":
-        spotify.process_track(id_from_url)
+        spotify.process_track(track_id=id_from_url)
     elif url_type == "album":
-        spotify.process_album(id_from_url)
+        spotify.process_album(album_id=id_from_url)
 
 
 if __name__ == "__main__":
